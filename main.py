@@ -5,7 +5,8 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import engine, get_db
+from api import auth, users
+from services.database import engine, get_db
 
 
 @asynccontextmanager
@@ -16,6 +17,9 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
 
 
 @app.get("/health")
