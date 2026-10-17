@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api import auth, users
+from api import auth, customers, users
 from services.database import engine, get_db
 
 
@@ -20,6 +20,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(customers.router, prefix="/api/customers", tags=["customers"])
 
 
 @app.get("/health")

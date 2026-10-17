@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models import user
+from models import customer, user
 from services.database import Base
 
 
@@ -42,6 +42,10 @@ class Company(Base):
 
     # Relations
     users: Mapped[list[user.User]] = relationship(
+        back_populates='company',
+        cascade='all, delete-orphan',
+    )
+    customers: Mapped[list[customer.Customer]] = relationship(
         back_populates='company',
         cascade='all, delete-orphan',
     )

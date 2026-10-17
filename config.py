@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     frontend_url: str = 'http://localhost:8000'
 
     reset_token_expire_minutes: int = 60
+    posts_per_page: int = 10
 
 
 settings = Settings()  # type: ignore[call-arg] # Loaded from .env file

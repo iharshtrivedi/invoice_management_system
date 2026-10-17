@@ -6,7 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import user as user_model
 from schemas import user
-from services.auth_service import CurrentUser, hash_password, verify_password, verify_user_role
+from services.auth_service import (
+    CurrentUser,
+    hash_password,
+    verify_password,
+    verify_user_role,
+)
 from services.database import get_db
 
 router = APIRouter()
