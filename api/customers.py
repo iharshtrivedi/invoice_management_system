@@ -41,6 +41,7 @@ async def create_customer(
         tax_id=customer.tax_id,
         billing_address=customer.billing_address,
         company_id=current_user.company_id,
+        created_by=current_user.id,
     )
     db.add(new_customer)
     await db.commit()
@@ -49,14 +50,14 @@ async def create_customer(
 
 
 @router.get(
-    '/customers',
+    '',
     response_model=customer.PaginatedCustomersResponse,
 )
 async def get_customers(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
     skip: Annotated[int, Query(ge=0)] = 0,
-    limit: Annotated[int, Query(ge=0, le=100)] = settings.posts_per_page
+    limit: Annotated[int, Query(ge=0, le=100)] = settings.items_per_page
 ):
     customer_count_result = await db.execute(
         select(func.count())
@@ -155,6 +156,7 @@ async def update_customer(
         customer.tax_id = customer_update.tax_id
     if customer_update.billing_address is not None:
         customer.billing_address = customer_update.billing_address
+    customer.updated_by = current_user.id
 
     await db.commit()
     await db.refresh(customer)

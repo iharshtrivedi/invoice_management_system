@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models import company
+from models import company, user
 from services.database import Base
 
 
@@ -47,13 +47,32 @@ class Customer(Base):
         nullable=False,
         index=True,
     )
+    created_by: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey('users.id'),
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
-        server_default=func.now()
+        server_default=func.now(),
+    )
+    updated_by: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey('users.id'),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     # relationships
     company: Mapped[company.Company] = relationship(
         back_populates='customers'
+    )
+    user: Mapped[user.User] = relationship(
+        back_populates='customers',
     )

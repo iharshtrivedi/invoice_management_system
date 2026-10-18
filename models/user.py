@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from models import customer, invoice, invoice_line, tax
 from services.database import Base
 
 
@@ -70,6 +71,18 @@ class User(Base):
     reset_tokens: Mapped[list[PasswordResetToken]] = relationship(
         back_populates='user',
         cascade='all, delete-orphan',
+    )
+    customers: Mapped[customer.Customer] = relationship(
+        back_populates='user',
+    )
+    invoices: Mapped[invoice.Invoice] = relationship(
+        back_populates='user',
+    )
+    invoice_lines: Mapped[invoice_line.InvoiceLine] = relationship(
+        back_populates='user',
+    )
+    taxes: Mapped[tax.Tax] = relationship(
+        back_populates='user',
     )
 
 

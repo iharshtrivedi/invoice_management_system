@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, Delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import user as user_model
@@ -164,4 +164,12 @@ async def change_password(
             detail='Current Password is incorrect',
         )
     current_user.hashed_password = hash_password(password_data.new_password)
+
+    await db.execute(
+        sql_delete(user_model.PasswordResetToken).where(
+            user_model.PasswordResetToken.user_id == current_user.id,
+        ),
+    )
+    await db.commit()
+
     return {'message': 'Password changed successfully'}
