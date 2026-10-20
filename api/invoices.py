@@ -4,9 +4,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
+from models import company as company_model
+from models import customer as customer_model
 from models import invoice as invoice_model
 from models import invoice_line as invoice_line_model
 from models import tax as tax_model
@@ -27,7 +30,26 @@ async def create_invoice(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    company = current_user.company
+    cust_result = await db.execute(
+        select(customer_model.Customer).where(
+            (customer_model.Customer.id == invoice_request_data.customer_id)
+            & (customer_model.Customer.company_id == current_user.company_id)
+        )
+    )
+    customer = cust_result.scalars().first()
+    if not customer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Customer not found'
+        )
+    
+    comp_result = await db.execute(
+        select(company_model.Company).where(
+            company_model.Company.id == current_user.company_id
+        )
+    )
+    company = comp_result.scalar_one()
+
     invoice_number = (
         f"{company.invoice_prefix}{company.invoice_next_number:05d}"
     )
@@ -92,6 +114,7 @@ async def create_invoice(
             line_total=line_total,
             taxes=line_taxes,
             created_by=current_user.id,
+            updated_by=current_user.id,
         )
         invoice_lines.append(invoice_line)
 
@@ -100,20 +123,32 @@ async def create_invoice(
     new_invoice = invoice_model.Invoice(
         invoice_number=invoice_number,
         invoice_lines=invoice_lines,
-        status=invoice_request_data.status,
         issue_date=invoice_request_data.issue_date,
         due_date=invoice_request_data.due_date,
-        invoice_subtotal=invoice_subtotal,
-        invoice_tax_total=invoice_tax_total,
-        invoice_total=(invoice_subtotal + invoice_tax_total),
+        subtotal=invoice_subtotal,
+        tax_total=invoice_tax_total,
+        total=(invoice_subtotal + invoice_tax_total),
         company_id=current_user.company_id,
+        customer_id=invoice_request_data.customer_id,
         created_by=current_user.id,
+        updated_by=current_user.id,
     )
 
     db.add(new_invoice)
     await db.commit()
     await db.refresh(new_invoice)
-    return new_invoice   
+
+    new_invoice_query = await db.execute(
+        select(invoice_model.Invoice)
+        .options(
+            selectinload(invoice_model.Invoice.invoice_lines)
+            .selectinload(invoice_line_model.InvoiceLine.taxes)
+        )
+        .where(invoice_model.Invoice.id == new_invoice.id)
+    )
+    new_invoice = new_invoice_query.scalar_one()
+
+    return new_invoice
 
 
 @router.get(
@@ -134,6 +169,10 @@ async def get_invoices(
 
     result = await db.execute(
         select(invoice_model.Invoice)
+        .options(
+            selectinload(invoice_model.Invoice.invoice_lines)
+            .selectinload(invoice_line_model.InvoiceLine.taxes)
+        )
         .where(invoice_model.Invoice.company_id == current_user.company_id)
         .order_by(invoice_model.Invoice.created_at.desc())
         .offset(skip)
@@ -162,6 +201,10 @@ async def get_invoice(
 ):
     result = await db.execute(
         select(invoice_model.Invoice)
+        .options(
+            selectinload(invoice_model.Invoice.invoice_lines)
+            .selectinload(invoice_line_model.InvoiceLine.taxes)
+        )
         .where(
             (invoice_model.Invoice.id == invoice_id)
             & (invoice_model.Invoice.company_id == current_user.company_id)

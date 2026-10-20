@@ -11,7 +11,7 @@ from schemas import invoice_line
 class InvoiceCreate(BaseModel):
     issue_date: date
     due_date: date
-    status: StatusEnum = StatusEnum.DRAFT
+    customer_id: int
     invoice_lines: list[invoice_line.InvoiceLineCreate] = Field(
         default_factory=list
     )
@@ -39,6 +39,7 @@ class InvoiceResponse(BaseModel):
 
     id: int
     company_id: int
+    customer_id: int
     invoice_number: str
     status: StatusEnum
     issue_date: date

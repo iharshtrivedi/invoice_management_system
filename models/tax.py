@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import enum
 from datetime import datetime
 from decimal import Decimal
-import enum
 
-from sqlalchemy import Enum as SQLAlchemyEnum, Numeric, func
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models import company, invoice_line, user
@@ -78,9 +78,14 @@ class Tax(Base):
         secondary=invoice_line_tax,
         back_populates='taxes',
     )
-    companies: Mapped[company.Company] = relationship(
+    company: Mapped[company.Company] = relationship(
         back_populates='taxes',
     )
-    user: Mapped[user.User] = relationship(
-        back_populates='customers',
+    creator: Mapped[user.User] = relationship(
+        back_populates='created_taxes',
+        foreign_keys=[created_by],
+    )
+    updator: Mapped[user.User] = relationship(
+        back_populates='updated_taxes',
+        foreign_keys=[updated_by],
     )

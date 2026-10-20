@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api import auth, customers, invoices, services, users
+from api import auth, customers, invoices, services, taxes, users
 from services.database import engine, get_db
 
 
@@ -21,6 +21,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(customers.router, prefix="/api/customers", tags=["customers"])
+app.include_router(taxes.router, prefix="/api/taxes", tags=['taxes'])
 app.include_router(invoices.router, prefix="/api/invoices", tags=['invoices'])
 app.include_router(services.router, prefix="/api/services", tags=['services'])
 

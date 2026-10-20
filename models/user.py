@@ -72,17 +72,37 @@ class User(Base):
         back_populates='user',
         cascade='all, delete-orphan',
     )
-    customers: Mapped[customer.Customer] = relationship(
-        back_populates='user',
+    created_customers: Mapped[list[customer.Customer]] = relationship(
+        back_populates='creator',
+        foreign_keys='customer.Customer.created_by',
     )
-    invoices: Mapped[invoice.Invoice] = relationship(
-        back_populates='user',
+    updated_customers: Mapped[list[customer.Customer]] = relationship(
+        back_populates='updator',
+        foreign_keys='customer.Customer.updated_by',
     )
-    invoice_lines: Mapped[invoice_line.InvoiceLine] = relationship(
-        back_populates='user',
+    created_invoices: Mapped[list[invoice.Invoice]] = relationship(
+        back_populates='creator',
+        foreign_keys='invoice.Invoice.created_by',
     )
-    taxes: Mapped[tax.Tax] = relationship(
-        back_populates='user',
+    updated_invoices: Mapped[list[invoice.Invoice]] = relationship(
+        back_populates='updator',
+        foreign_keys='invoice.Invoice.updated_by',
+    )
+    created_invoice_lines: Mapped[list[invoice_line.InvoiceLine]] = relationship(
+        back_populates='creator',
+        foreign_keys='invoice_line.InvoiceLine.created_by',
+    )
+    updated_invoice_lines: Mapped[list[invoice_line.InvoiceLine]] = relationship(
+        back_populates='updator',
+        foreign_keys='invoice_line.InvoiceLine.updated_by',
+    )
+    created_taxes: Mapped[list[tax.Tax]] = relationship(
+        back_populates='creator',
+        foreign_keys='tax.Tax.created_by',
+    )
+    updated_taxes: Mapped[list[tax.Tax]] = relationship(
+        back_populates='updator',
+        foreign_keys='tax.Tax.updated_by',
     )
 
 

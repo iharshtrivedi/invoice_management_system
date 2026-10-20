@@ -83,6 +83,11 @@ class InvoiceLine(Base):
         secondary=invoice_line_tax,
         back_populates='invoice_lines',
     )
-    user: Mapped[user.User] = relationship(
-        back_populates='customers',
+    creator: Mapped[user.User] = relationship(
+        back_populates='created_invoice_lines',
+        foreign_keys=[created_by],
+    )
+    updator: Mapped[user.User] = relationship(
+        back_populates='updated_invoice_lines',
+        foreign_keys=[updated_by],
     )

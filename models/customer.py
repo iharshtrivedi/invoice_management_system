@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models import company, user
+from models import company, invoice, user
 from services.database import Base
 
 
@@ -73,6 +73,14 @@ class Customer(Base):
     company: Mapped[company.Company] = relationship(
         back_populates='customers'
     )
-    user: Mapped[user.User] = relationship(
-        back_populates='customers',
+    invoices: Mapped[list[invoice.Invoice]] = relationship(
+        back_populates='customer'
+    )
+    creator: Mapped[user.User] = relationship(
+        back_populates='created_customers',
+        foreign_keys=[created_by],
+    )
+    updator: Mapped[user.User] = relationship(
+        back_populates='updated_customers',
+        foreign_keys=[updated_by],
     )

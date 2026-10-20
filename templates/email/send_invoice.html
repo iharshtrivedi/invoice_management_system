@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice {{ invoice_number }}</title>
+</head>
+
+<body style="margin: 0;
+             padding: 0;
+             font-family: Arial, Helvetica, sans-serif;
+             background-color: #f4f4f4;">
+
+    <table role="presentation"
+           width="100%"
+           cellspacing="0"
+           cellpadding="0"
+           style="background-color: #f4f4f4; padding: 20px 0;">
+
+        <tr>
+            <td align="center">
+
+                <table role="presentation"
+                       width="600"
+                       cellspacing="0"
+                       cellpadding="0"
+                       style="width: 100%;
+                              max-width: 600px;
+                              background-color: #ffffff;
+                              border-radius: 8px;
+                              overflow: hidden;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #527c9f;
+                                   padding: 30px;
+                                   text-align: center;">
+
+                            <h1 style="margin: 0;
+                                       color: #ffffff;
+                                       font-size: 24px;">
+                                {{ company_name }}
+                            </h1>
+
+                            <p style="margin: 10px 0 0;
+                                      color: #ffffff;
+                                      font-size: 14px;">
+                                Invoice Notification
+                            </p>
+
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+
+                            <h2 style="margin: 0 0 20px;
+                                       color: #333333;
+                                       font-size: 20px;">
+                                Invoice {{ invoice_number }}
+                            </h2>
+
+                            <p style="margin: 0 0 15px;
+                                      color: #555555;
+                                      font-size: 16px;
+                                      line-height: 1.5;">
+                                Hi {{ customer_name }},
+                            </p>
+
+                            <p style="margin: 0 0 25px;
+                                      color: #555555;
+                                      font-size: 16px;
+                                      line-height: 1.5;">
+                                Please find the details of your invoice below.
+                                The invoice PDF is attached to this email for
+                                your reference.
+                            </p>
+
+                            <!-- Invoice Details -->
+                            <table role="presentation"
+                                   width="100%"
+                                   cellspacing="0"
+                                   cellpadding="0"
+                                   style="border: 1px solid #eeeeee;
+                                          border-collapse: collapse;
+                                          margin-bottom: 25px;">
+
+                                <tr>
+                                    <td style="padding: 12px;
+                                               color: #777777;
+                                               font-size: 14px;
+                                               border-bottom: 1px solid #eeeeee;">
+                                        Invoice Number
+                                    </td>
+                                    <td align="right"
+                                        style="padding: 12px;
+                                               color: #333333;
+                                               font-size: 14px;
+                                               font-weight: bold;
+                                               border-bottom: 1px solid #eeeeee;">
+                                        {{ invoice_number }}
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td style="padding: 12px;
+                                               color: #777777;
+                                               font-size: 14px;
+                                               border-bottom: 1px solid #eeeeee;">
+                                        Invoice Date
+                                    </td>
+                                    <td align="right"
+                                        style="padding: 12px;
+                                               color: #333333;
+                                               font-size: 14px;
+                                               border-bottom: 1px solid #eeeeee;">
+                                        {{ issue_date }}
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td style="padding: 12px;
+                                               color: #777777;
+                                               font-size: 14px;
+                                               border-bottom: 1px solid #eeeeee;">
+                                        Due Date
+                                    </td>
+                                    <td align="right"
+                                        style="padding: 12px;
+                                               color: #333333;
+                                               font-size: 14px;
+                                               border-bottom: 1px solid #eeeeee;">
+                                        {{ due_date }}
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td style="padding: 16px 12px;
+                                               color: #333333;
+                                               font-size: 15px;
+                                               font-weight: bold;">
+                                        Amount Due
+                                    </td>
+                                    <td align="right"
+                                        style="padding: 16px 12px;
+                                               color: #527c9f;
+                                               font-size: 20px;
+                                               font-weight: bold;">
+                                        {{ currency }} {{ total }}
+                                    </td>
+                                </tr>
+
+                            </table>
+
+                            <!-- Payment Reminder -->
+                            <p style="margin: 0 0 25px;
+                                      color: #555555;
+                                      font-size: 14px;
+                                      line-height: 1.6;">
+                                {% if status == "paid" %}
+                                    Thank you! This invoice has been marked
+                                    as paid.
+                                {% elif status == "cancelled" %}
+                                    Please note that this invoice has been
+                                    cancelled. No payment is required.
+                                {% else %}
+                                    {% if status == "draft" %}
+                                        This invoice is currently a draft.
+                                    {% else %}
+                                        Please arrange payment by
+                                        <strong>{{ due_date }}</strong>.
+                                    {% endif %}
+                                {% endif %}
+                            </p>
+
+                            <!-- View Invoice Button -->
+                            {% if invoice_url %}
+                            <table role="presentation"
+                                   cellspacing="0"
+                                   cellpadding="0"
+                                   style="margin: 0 auto 25px;">
+
+                                <tr>
+                                    <td style="background-color: #527c9f;
+                                               border-radius: 5px;
+                                               text-align: center;">
+
+                                        <a href="{{ invoice_url }}"
+                                           style="display: inline-block;
+                                                  padding: 15px 30px;
+                                                  color: #ffffff;
+                                                  text-decoration: none;
+                                                  font-size: 16px;
+                                                  font-weight: bold;">
+                                            View Invoice
+                                        </a>
+
+                                    </td>
+                                </tr>
+
+                            </table>
+                            {% endif %}
+
+                            <p style="margin: 0 0 15px;
+                                      color: #777777;
+                                      font-size: 14px;
+                                      line-height: 1.5;">
+                                If you have already made the payment,
+                                please disregard any outstanding payment
+                                reminder.
+                            </p>
+
+                            <p style="margin: 25px 0 0;
+                                      color: #777777;
+                                      font-size: 14px;
+                                      line-height: 1.5;">
+                                If you have any questions regarding this
+                                invoice, please contact us.
+
+                                <br><br>
+
+                                Thank you for your business!
+                                <br>
+                                <strong>{{ company_name }}</strong>
+                            </p>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa;
+                                   padding: 20px 30px;
+                                   text-align: center;
+                                   border-top: 1px solid #eeeeee;">
+
+                            <p style="margin: 0;
+                                      color: #999999;
+                                      font-size: 12px;
+                                      line-height: 1.6;">
+                                This is an automated message from
+                                {{ company_name }}.
+
+                                <br>
+
+                                Please do not reply directly to this email.
+                            </p>
+
+                        </td>
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+
+    </table>
+
+</body>
+</html>

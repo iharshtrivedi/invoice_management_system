@@ -18,7 +18,7 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models import company, invoice_line, user
+from models import company, customer, invoice_line, user
 from services.database import Base
 
 
@@ -53,6 +53,12 @@ class Invoice(Base):
     company_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey('companies.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    customer_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey('customers.id'),
         nullable=False,
         index=True,
     )
@@ -128,10 +134,18 @@ class Invoice(Base):
     company: Mapped[company.Company] = relationship(
         back_populates='invoices',
     )
-    user: Mapped[user.User] = relationship(
+    customer: Mapped[customer.Customer] = relationship(
         back_populates='invoices',
     )
     invoice_lines: Mapped[list[invoice_line.InvoiceLine]] = relationship(
         back_populates='invoice',
         cascade='all, delete-orphan',
+    )
+    creator: Mapped[user.User] = relationship(
+        back_populates='created_invoices',
+        foreign_keys=[created_by],
+    )
+    updator: Mapped[user.User] = relationship(
+        back_populates='updated_invoices',
+        foreign_keys=[updated_by],
     )

@@ -39,9 +39,10 @@ async def create_tax(
     new_tax = tax_model.Tax(
         name=tax_request_data.name,
         amount=tax_request_data.amount,
-        tax_typa=tax_request_data.tax_type,
+        tax_type=tax_request_data.tax_type,
         company_id=current_user.company_id,
         created_by=current_user.id,
+        updated_by=current_user.id,
     )
     db.add(new_tax)
     await db.commit()

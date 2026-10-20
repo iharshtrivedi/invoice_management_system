@@ -42,6 +42,7 @@ async def create_customer(
         billing_address=customer.billing_address,
         company_id=current_user.company_id,
         created_by=current_user.id,
+        updated_by=current_user.id,
     )
     db.add(new_customer)
     await db.commit()
