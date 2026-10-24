@@ -9,6 +9,7 @@ from models import tax as tax_model
 from schemas import tax
 from services.auth_service import CurrentUser
 from services.database import get_db
+from utils.common_utils import get_target_object
 
 router = APIRouter()
 
@@ -94,18 +95,11 @@ async def get_tax(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(tax_model.Tax).where(
-            (tax_model.Tax.id == tax_id)
-            & (tax_model.Tax.company_id == current_user.company_id)
-        )
-    )
-    tax = result.scalars().first()
-    if tax:
-        return tax
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail='Tax not found',
+    return await get_target_object(
+        db=db,
+        target_model=tax_model.Tax,
+        target_id=tax_id,
+        company_id=current_user.company_id,
     )
 
 
@@ -119,18 +113,12 @@ async def update_tax(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(tax_model.Tax).where(
-            (tax_model.Tax.id == tax_id)
-            & (tax_model.Tax.company_id == current_user.company_id)
-        )
+    tax = await get_target_object(
+        db=db,
+        target_model=tax_model.Tax,
+        target_id=tax_id,
+        company_id=current_user.company_id,
     )
-    tax = result.scalars().first()
-    if not tax:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tax not found',
-        )
 
     if tax_update.name is not None and tax_update.name != tax.name:
         result = await db.execute(
@@ -168,17 +156,11 @@ async def delete_tax(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(tax_model.Tax).where(
-            (tax_model.Tax.id == tax_id)
-            & (tax_model.Tax.company_id == current_user.company_id)
-        )
+    tax = await get_target_object(
+        db=db,
+        target_model=tax_model.Tax,
+        target_id=tax_id,
+        company_id=current_user.company_id,
     )
-    tax = result.scalars().first()
-    if not tax:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tax not found',
-        )
     await db.delete(tax)
     await db.commit()

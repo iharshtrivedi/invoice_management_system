@@ -4,8 +4,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from config import settings
 from models import company as company_model
@@ -16,6 +16,7 @@ from models import tax as tax_model
 from schemas import invoice
 from services.auth_service import CurrentUser
 from services.database import get_db
+from utils.common_utils import get_target_object
 
 router = APIRouter()
 
@@ -30,18 +31,12 @@ async def create_invoice(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    cust_result = await db.execute(
-        select(customer_model.Customer).where(
-            (customer_model.Customer.id == invoice_request_data.customer_id)
-            & (customer_model.Customer.company_id == current_user.company_id)
-        )
+    customer = await get_target_object(
+        db=db,
+        target_model=customer_model.Customer,
+        target_id=invoice_request_data.customer_id,
+        company_id=current_user.company_id,
     )
-    customer = cust_result.scalars().first()
-    if not customer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Customer not found'
-        )
     
     comp_result = await db.execute(
         select(company_model.Company).where(
@@ -70,7 +65,6 @@ async def create_invoice(
             )
         )
         taxes = result.scalars().all()
-
         if len(taxes) != len(set(tax_ids)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -129,7 +123,7 @@ async def create_invoice(
         tax_total=invoice_tax_total,
         total=(invoice_subtotal + invoice_tax_total),
         company_id=current_user.company_id,
-        customer_id=invoice_request_data.customer_id,
+        customer_id=customer.id,
         created_by=current_user.id,
         updated_by=current_user.id,
     )
@@ -199,23 +193,16 @@ async def get_invoice(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(invoice_model.Invoice)
-        .options(
-            selectinload(invoice_model.Invoice.invoice_lines)
-            .selectinload(invoice_line_model.InvoiceLine.taxes)
-        )
-        .where(
-            (invoice_model.Invoice.id == invoice_id)
-            & (invoice_model.Invoice.company_id == current_user.company_id)
-        )
+    options = (
+        selectinload(invoice_model.Invoice.invoice_lines)
+        .selectinload(invoice_line_model.InvoiceLine.taxes),
     )
-    invoice = result.scalars().first()
-    if invoice:
-        return invoice
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail='Invoice not found',
+    return await get_target_object(
+        db=db,
+        target_model=invoice_model.Invoice,
+        target_id=invoice_id,
+        company_id=current_user.company_id,
+        target_model_options=options,
     )
 
 
@@ -333,17 +320,11 @@ async def delete_invoice(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(invoice_model.Invoice).where(
-            (invoice_model.Invoice.id == invoice_id)
-            & (invoice_model.Invoice.company_id == current_user.company_id)
-        )
+    invoice = await get_target_object(
+        db=db,
+        target_model=invoice_model.Invoice,
+        target_id=invoice_id,
+        company_id=current_user.company_id,
     )
-    invoice = result.scalars().first()
-    if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Invoice not found',
-        )
     await db.delete(invoice)
     await db.commit()

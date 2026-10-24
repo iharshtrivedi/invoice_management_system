@@ -1,24 +1,49 @@
-from collections.abc import Sequence
-from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from config import settings
 from models import invoice as invoice_model
 from models import invoice_line as invoice_line_model
-from models import tax as tax_model
 from schemas import invoice
 from services.auth_service import CurrentUser
 from services.database import get_db
-from utils.pdf_utils import generate_invoice_pdf
+from utils.common_utils import get_target_object
 from utils.email_utils import send_invoice_email
-from fastapi import BackgroundTasks
+from utils.pdf_utils import generate_invoice_pdf
 
 router = APIRouter()
+
+
+async def update_inv_status(
+    db: AsyncSession,
+    company_id: int,
+    invoice_id: int,
+    target_inv_status: invoice_model.StatusEnum,
+    required_inv_statuses: list[invoice_model.StatusEnum] | None = None,
+    error_msg: str | None = None,
+):
+    options = (
+        selectinload(invoice_model.Invoice.invoice_lines)
+        .selectinload(invoice_line_model.InvoiceLine.taxes),
+    )
+    inv = await get_target_object(
+        db=db,
+        target_model=invoice_model.Invoice,
+        target_id=invoice_id,
+        company_id=company_id,
+        target_model_options=options,
+    )
+    if required_inv_statuses is not None and inv.status not in required_inv_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+    inv.status = target_inv_status
+    await db.commit()
+    await db.refresh(inv)
+    return inv
 
 
 @router.patch(
@@ -30,35 +55,14 @@ async def confirm_invoice(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(invoice_model.Invoice)
-        .options(
-            selectinload(invoice_model.Invoice.invoice_lines)
-            .selectinload(invoice_line_model.InvoiceLine.taxes)
-        )
-        .where(
-            (invoice_model.Invoice.id == invoice_id)
-            & (invoice_model.Invoice.company_id == current_user.company_id)
-        )
+    return await update_inv_status(
+        db=db,
+        company_id=current_user.company_id,
+        invoice_id=invoice_id,
+        required_inv_statuses=[invoice_model.StatusEnum.DRAFT],
+        target_inv_status=invoice_model.StatusEnum.CONFIRMED,
+        error_msg='Only draft invoices can be confirmed',
     )
-    inv = result.scalars().first()
-    if not inv:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Invoice not found'
-        )
-
-    if inv.status == 'draft':
-        inv.status = invoice_model.StatusEnum.CONFIRMED
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Only draft invoices can be confirmed'
-        )  
-
-    await db.commit()
-    await db.refresh(inv)
-    return inv
 
 
 @router.patch(
@@ -70,28 +74,12 @@ async def reset_invoice(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(invoice_model.Invoice)
-        .options(
-            selectinload(invoice_model.Invoice.invoice_lines)
-            .selectinload(invoice_line_model.InvoiceLine.taxes)
-        )
-        .where(
-            (invoice_model.Invoice.id == invoice_id)
-            & (invoice_model.Invoice.company_id == current_user.company_id)
-        )
+    return await update_inv_status(
+        db=db,
+        company_id=current_user.company_id,
+        invoice_id=invoice_id,
+        target_inv_status=invoice_model.StatusEnum.DRAFT,
     )
-    inv = result.scalars().first()
-    if not inv:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Invoice not found'
-        )
-
-    inv.status = invoice_model.StatusEnum.DRAFT
-    await db.commit()
-    await db.refresh(inv)
-    return inv
 
 
 @router.patch(
@@ -103,28 +91,12 @@ async def cancel_invoice(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(invoice_model.Invoice)
-        .options(
-            selectinload(invoice_model.Invoice.invoice_lines)
-            .selectinload(invoice_line_model.InvoiceLine.taxes)
-        )
-        .where(
-            (invoice_model.Invoice.id == invoice_id)
-            & (invoice_model.Invoice.company_id == current_user.company_id)
-        )
+    return await update_inv_status(
+        db=db,
+        company_id=current_user.company_id,
+        invoice_id=invoice_id,
+        target_inv_status=invoice_model.StatusEnum.CANCELLED,
     )
-    inv = result.scalars().first()
-    if not inv:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Invoice not found'
-        )
-
-    inv.status = invoice_model.StatusEnum.CANCELLED
-    await db.commit()
-    await db.refresh(inv)
-    return inv
 
 
 @router.get("/invoices/{invoice_id}/pdf")
@@ -133,25 +105,17 @@ async def generate_pdf(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(invoice_model.Invoice)
-        .options(
-            selectinload(invoice_model.Invoice.company),
-            selectinload(invoice_model.Invoice.invoice_lines)
-            .selectinload(invoice_line_model.InvoiceLine.taxes)
-        )
-        .where(
-            (invoice_model.Invoice.id == invoice_id)
-            & (invoice_model.Invoice.company_id == current_user.company_id)
-        )
+    options = (
+        selectinload(invoice_model.Invoice.invoice_lines)
+        .selectinload(invoice_line_model.InvoiceLine.taxes),
     )
-    inv = result.scalars().first()
-
-    if inv is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Invoice not found",
-        )
+    inv = await get_target_object(
+        db=db,
+        target_model=invoice_model.Invoice,
+        target_id=invoice_id,
+        company_id=current_user.company_id,
+        target_model_options=options,
+    )
 
     pdf_bytes = generate_invoice_pdf(inv)
 
@@ -173,27 +137,19 @@ async def send_invoice(
     background_tasks: BackgroundTasks,
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(invoice_model.Invoice)
-        .where(
-            invoice_model.Invoice.id == invoice_id,
-            invoice_model.Invoice.company_id == current_user.company_id,
-        )
-        .options(
-            selectinload(invoice_model.Invoice.company),
-            selectinload(invoice_model.Invoice.invoice_lines)
-            .selectinload(invoice_line_model.InvoiceLine.taxes),
-            selectinload(invoice_model.Invoice.customer),
-        )
+    options = (
+        selectinload(invoice_model.Invoice.company),
+        selectinload(invoice_model.Invoice.invoice_lines)
+        .selectinload(invoice_line_model.InvoiceLine.taxes),
+        selectinload(invoice_model.Invoice.customer),
     )
-
-    inv = result.scalar_one_or_none()
-
-    if inv is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invoice not found",
-        )
+    inv = await get_target_object(
+        db=db,
+        target_model=invoice_model.Invoice,
+        target_id=invoice_id,
+        company_id=current_user.company_id,
+        target_model_options=options,
+    )
 
     # Replace with your actual customer relationship and email field.
     customer_email = inv.customer.email

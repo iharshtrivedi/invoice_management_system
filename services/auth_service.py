@@ -70,7 +70,7 @@ def verify_access_token(token: str) -> str | None:
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> user_model.User:
     user_id = verify_access_token(token)
     if user_id is None:

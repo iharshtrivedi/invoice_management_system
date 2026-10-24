@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select, Delete as sql_delete
+from sqlalchemy import Delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import user as user_model
@@ -13,6 +13,7 @@ from services.auth_service import (
     verify_user_role,
 )
 from services.database import get_db
+from utils.common_utils import ensure_email_is_unique, get_target_object
 
 router = APIRouter()
 
@@ -23,17 +24,17 @@ async def get_current_user(current_user: CurrentUser):
 
 
 @router.get("/{user_id}", response_model=user.UserResponsePublic)
-async def get_user(user_id: int, current_user: CurrentUser, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(
-        select(user_model.User).where(
-            (user_model.User.id == user_id)
-            & (user_model.User.company_id == current_user.company_id)
-        )
+async def get_user(
+    user_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentUser,
+):
+    return await get_target_object(
+        db=db,
+        target_model=user_model.User,
+        target_id=user_id,
+        company_id=current_user.company_id,
     )
-    user = result.scalars().first()
-    if user:
-        return user
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
 
 @router.post(
@@ -46,18 +47,12 @@ async def create_user(
     current_user: Annotated[user_model.User, Depends(verify_user_role('admin'))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    result = await db.execute(
-        select(user_model.User).where(
-            (func.lower(user_model.User.email) == user.email.lower())
-            & (user_model.User.company_id == current_user.company_id)
-        )
+    await ensure_email_is_unique(
+        db=db,
+        target_model=user_model.User,
+        email=user.email,
+        company_id=current_user.company_id,
     )
-    existing_email = result.scalars().first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Email already registered!',
-        )
 
     new_user = user_model.User(
         name=user.name,
@@ -88,33 +83,23 @@ async def update_user(
             detail="Not authorized to update this user",
         )
 
-    result = await db.execute(select(user_model.User).where(
-            (user_model.User.id == user_id)
-            & (user_model.User.company_id == current_user.company_id)
-        )
+    user = await get_target_object(
+        db=db,
+        target_model=user_model.User,
+        target_id=user_id,
+        company_id=current_user.company_id,
     )
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+
     if (
         user_update.email is not None
         and user_update.email.lower() != user.email.lower()
     ):
-        result = await db.execute(
-            select(user_model.User).where(
-                (func.lower(user_model.User.email) == user_update.email.lower())
-                & (user_model.User.company_id == current_user.company_id)
-            ),
+        await ensure_email_is_unique(
+            db=db,
+            target_model=user_model.User,
+            email=user.email,
+            company_id=current_user.company_id,
         )
-        existing_email = result.scalars().first()
-        if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered",
-            )
 
     if user_update.name is not None:
         user.name = user_update.name
@@ -134,17 +119,12 @@ async def delete_user(
 ):
     if user_id != current_user.id:
         verify_user_role('admin')
-    result = await db.execute(select(user_model.User).where(
-            (user_model.User.id == user_id)
-            & (user_model.User.company_id == current_user.company_id)
-        )
+    user = await get_target_object(
+        db=db,
+        target_model=user_model.User,
+        target_id=user_id,
+        company_id=current_user.company_id,
     )
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
     await db.delete(user)
     await db.commit()
 

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +9,7 @@ from models import customer as customer_model
 from schemas import customer
 from services.auth_service import CurrentUser
 from services.database import get_db
+from utils.common_utils import ensure_email_is_unique, get_target_object
 
 router = APIRouter()
 
@@ -23,18 +24,12 @@ async def create_customer(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(customer_model.Customer).where(
-            (func.lower(customer_model.Customer.email) == customer.email.lower())
-            & (customer_model.Customer.company_id == current_user.company_id)
-        )
+    await ensure_email_is_unique(
+        db=db,
+        target_model=customer_model.Customer,
+        email=customer.email,
+        company_id=current_user.company_id,
     )
-    customer_registered = result.scalars().first()
-    if customer_registered:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Customer email is already registered.',
-        )
     new_customer = customer_model.Customer(
         name=customer.name,
         email=customer.email,
@@ -94,18 +89,11 @@ async def get_customer(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(customer_model.Customer).where(
-            (customer_model.Customer.id == customer_id)
-            & (customer_model.Customer.company_id == current_user.company_id)
-        )
-    )
-    customer = result.scalars().first()
-    if customer:
-        return customer
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail='Customer not found',
+    return await get_target_object(
+        db=db,
+        target_model=customer_model.Customer,
+        target_id=customer_id,
+        company_id=current_user.company_id,
     )
 
 
@@ -119,35 +107,23 @@ async def update_customer(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(customer_model.Customer).where(
-            (customer_model.Customer.id == customer_id)
-            & (customer_model.Customer.company_id == current_user.company_id)
-        )
+    customer = await get_target_object(
+        db=db,
+        target_model=customer_model.Customer,
+        target_id=customer_id,
+        company_id=current_user.company_id,
     )
-    customer = result.scalars().first()
-    if not customer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Customer not found',
-        )
 
     if (
         customer_update.email is not None
         and customer_update.email.lower() != customer.email.lower()
     ):
-        result = await db.execute(
-            select(customer_model.Customer).where(
-                (func.lower(customer_model.Customer.email) == customer_update.email.lower())
-                & (customer_model.Customer.company_id == current_user.company_id)
-            )
+        await ensure_email_is_unique(
+            db=db,
+            target_model=customer_model.Customer,
+            email=customer.email,
+            company_id=current_user.company_id,
         )
-        existing_email = result.scalars().first()
-        if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Email already registered',
-            )
 
     if customer_update.name is not None:
         customer.name = customer_update.name
@@ -173,17 +149,11 @@ async def delete_customer(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: CurrentUser,
 ):
-    result = await db.execute(
-        select(customer_model.Customer).where(
-            (customer_model.Customer.id == customer_id)
-            & (customer_model.Customer.company_id == current_user.company_id)
-        )
+    customer = await get_target_object(
+        db=db,
+        target_model=customer_model.Customer,
+        target_id=customer_id,
+        company_id=current_user.company_id,
     )
-    customer = result.scalars().first()
-    if not customer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Customer not found',
-        )
     await db.delete(customer)
     await db.commit()

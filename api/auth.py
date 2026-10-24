@@ -27,6 +27,7 @@ from services.auth_service import (
 )
 from services.database import get_db
 from utils import email_utils
+from utils.common_utils import get_target_object
 
 router = APIRouter()
 
@@ -104,17 +105,12 @@ async def deregister_company(
     current_user: Annotated[user_model.User, Depends(verify_user_role('admin'))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    result = await db.execute(select(company_model.Company).where(
-            (company_model.Company.id == company_id)
-            & (current_user.company_id == company_id)
-        )
+    company = await get_target_object(
+        db=db,
+        target_model=company_model.Company,
+        target_id=company_id,
+        company_id=current_user.company_id,
     )
-    company = result.scalars().first()
-    if not company:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Company not found",
-        )
     await db.delete(company)
     await db.commit()
 
