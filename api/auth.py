@@ -3,7 +3,6 @@ from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     status,
@@ -26,7 +25,8 @@ from services.auth_service import (
     verify_user_role,
 )
 from services.database import get_db
-from utils import email_utils
+from services import email_service
+from tasks.email_tasks import send_email_task
 from utils.common_utils import get_target_object
 
 router = APIRouter()
@@ -151,7 +151,6 @@ async def user_login(
 )
 async def forgot_password(
     request_data: auth.ForgotPasswordRequest,
-    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     result = await db.execute(
@@ -181,11 +180,15 @@ async def forgot_password(
         db.add(reset_token)
         await db.commit()
 
-        background_tasks.add_task(
-            email_utils.send_password_reset_email,
-            to_email=user.email,
+        subject, plain_text, html_content = email_service.build_password_reset_email(
             username=user.name,
             token=token,
+        )
+        send_email_task.delay(
+            to_email=user.email,
+            subject=subject,
+            plain_text=plain_text,
+            html_content=html_content,
         )
 
     return {

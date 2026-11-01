@@ -30,6 +30,13 @@ class StatusEnum(str, enum.Enum):
     CANCELLED = 'cancelled'
 
 
+class EmailStatusEnum(str, enum.Enum):
+    NOT_SENT = 'not_sent'
+    QUEUED = 'queued'
+    SENT = 'sent'
+    FAILED = 'failed'
+
+
 class Invoice(Base):
     __tablename__ = 'invoices'
 
@@ -103,6 +110,22 @@ class Invoice(Base):
     email_sent_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=True,
+    )
+    email_status: Mapped[EmailStatusEnum] = mapped_column(
+        SQLAlchemyEnum(
+            EmailStatusEnum,
+            name='email_status_enum',
+            values_callable=lambda enum_cls: [
+                member.value for member in enum_cls
+            ],
+        ),
+        nullable=False,
+        default=EmailStatusEnum.NOT_SENT,
+    )
+    email_task_id: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        index=True,
     )
     paid_at: Mapped[datetime] = mapped_column(
         DateTime,

@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from models.invoice import StatusEnum
+from models.invoice import EmailStatusEnum, StatusEnum
 from schemas import invoice_line
 
 
@@ -47,6 +47,8 @@ class InvoiceResponse(BaseModel):
     subtotal: Decimal
     tax_total: Decimal
     total: Decimal
+    email_status: EmailStatusEnum
+    email_task_id: str | None
     email_sent_at: datetime | None
     paid_at: datetime | None
     invoice_lines: list[invoice_line.InvoiceLineResponse] = Field(

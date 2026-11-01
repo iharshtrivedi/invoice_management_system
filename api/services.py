@@ -1,6 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+import base64
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,8 +12,12 @@ from schemas import invoice
 from services.auth_service import CurrentUser
 from services.database import get_db
 from utils.common_utils import get_target_object
-from utils.email_utils import send_invoice_email
 from utils.pdf_utils import generate_invoice_pdf
+from tasks.email_tasks import send_email_task
+
+from fastapi.templating import Jinja2Templates
+
+templates = Jinja2Templates(directory="templates")
 
 router = APIRouter()
 
@@ -130,11 +136,66 @@ async def generate_pdf(
     )
 
 
+async def send_invoice_email(
+    to_email: str,
+    customer_name: str,
+    invoice: invoice_model.Invoice,
+    pdf_bytes: bytes,
+):
+    template = templates.env.get_template(
+        "email/send_invoice.html"
+    )
+
+    html_content = template.render(
+        company_name=invoice.company.name,
+        customer_name=customer_name,
+        invoice_number=invoice.invoice_number,
+        issue_date=invoice.issue_date.strftime("%d %b %Y"),
+        due_date=invoice.due_date.strftime("%d %b %Y"),
+        currency=invoice.company.currency,
+        total=f"{invoice.total:,.2f}",
+        status=invoice.status.value,
+    )
+
+    plain_text = f"""Hi {customer_name},
+
+Please find your invoice details below.
+
+Invoice Number: {invoice.invoice_number}
+Invoice Date: {invoice.issue_date:%d %b %Y}
+Due Date: {invoice.due_date:%d %b %Y}
+Amount: {invoice.company.currency} {invoice.total:,.2f}
+Status: {invoice.status.value.upper()}
+
+The invoice PDF is attached to this email.
+
+Thank you for your business!
+
+Best regards,
+The Invoice Management System Team
+"""
+
+    task = send_email_task.delay(
+        to_email=to_email,
+        subject=f"Invoice {invoice.invoice_number}",
+        plain_text=plain_text,
+        html_content=html_content,
+        attachments=[
+            {
+                "filename": f"invoice_{invoice.invoice_number}.pdf",
+                # Celery is configured for JSON; binary attachments must be encoded.
+                "content": base64.b64encode(pdf_bytes).decode("ascii"),
+            }
+        ],
+    )
+
+    return task.id
+
+
 @router.post('/send-invoice/{invoice_id}', status_code=status.HTTP_200_OK)
 async def send_invoice(
     invoice_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-    background_tasks: BackgroundTasks,
     current_user: CurrentUser,
 ):
     options = (
@@ -163,19 +224,21 @@ async def send_invoice(
 
     pdf_bytes = generate_invoice_pdf(inv)
 
-    background_tasks.add_task(
-        send_invoice_email,
+    task_id = await send_invoice_email(
         to_email=customer_email,
         customer_name=customer_name,
         invoice=inv,
         pdf_bytes=pdf_bytes,
     )
 
-    inv.status = invoice_model.StatusEnum.DRAFT
+    inv.email_status = invoice_model.EmailStatusEnum.QUEUED
+    inv.email_task_id = task_id
+    inv.email_sent_at = None
     await db.commit()
     await db.refresh(inv)
 
     return {
         "message": "An email will be sent to the customer's mail address shortly.",
         "invoice_number": inv.invoice_number,
+        "task_id": task_id,
     }
