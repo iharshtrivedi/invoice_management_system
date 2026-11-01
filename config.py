@@ -32,5 +32,8 @@ class Settings(BaseSettings):
     # Redis rate limiting
     redis_url: str
 
+    # Payment webhooks
+    payment_webhook_secret: SecretStr = SecretStr("")
+
 
 settings = Settings()  # type: ignore[call-arg] # Loaded from .env file

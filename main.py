@@ -6,7 +6,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api import auth, customers, invoices, services, taxes, users
+from api import auth, customers, invoices, services, taxes, users, webhooks
 from config import settings
 from services.database import engine, get_db
 
@@ -28,6 +28,7 @@ app.include_router(customers.router, prefix="/api/customers", tags=["customers"]
 app.include_router(taxes.router, prefix="/api/taxes", tags=['taxes'])
 app.include_router(invoices.router, prefix="/api/invoices", tags=['invoices'])
 app.include_router(services.router, prefix="/api/services", tags=['services'])
+app.include_router(webhooks.router, prefix="/api/webhooks", tags=['webhooks'])
 
 
 @app.get("/health")

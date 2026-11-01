@@ -1,5 +1,6 @@
 import asyncio
 import os
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-TEST_DATABASE_PATH = Path(__file__).parent / "test.sqlite3"
+TEST_DATABASE_PATH = Path(tempfile.gettempdir()) / "invoice_management_system_tests.sqlite3"
 os.environ.update(
     {
         "DATABASE_URL": f"sqlite+aiosqlite:///{TEST_DATABASE_PATH.as_posix()}",
@@ -15,6 +16,7 @@ os.environ.update(
         "CELERY_BROKER_URL": "redis://unused/0",
         "CELERY_RESULT_BACKEND": "redis://unused/1",
         "REDIS_URL": "redis://unused/2",
+        "PAYMENT_WEBHOOK_SECRET": "test-payment-webhook-secret",
     }
 )
 
