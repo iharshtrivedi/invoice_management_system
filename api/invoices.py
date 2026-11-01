@@ -185,6 +185,53 @@ async def get_invoices(
 
 
 @router.get(
+    '/summary',
+    response_model=invoice.CompanyInvoiceSummaryResponse,
+)
+async def get_company_invoice_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentUser,
+):
+    """Return invoice counts and amounts grouped by status for this company."""
+    result = await db.execute(
+        select(
+            invoice_model.Invoice.status,
+            func.count(invoice_model.Invoice.id),
+            func.sum(invoice_model.Invoice.total),
+        )
+        .where(invoice_model.Invoice.company_id == current_user.company_id)
+        .group_by(invoice_model.Invoice.status)
+    )
+
+    status_summaries = {
+        invoice_status: invoice.InvoiceStatusSummary(
+            status=invoice_status,
+            invoice_count=0,
+            total_amount=Decimal('0.00'),
+        )
+        for invoice_status in invoice_model.StatusEnum
+    }
+    for invoice_status, invoice_count, total_amount in result.all():
+        status = invoice_model.StatusEnum(invoice_status)
+        status_summaries[status] = invoice.InvoiceStatusSummary(
+            status=status,
+            invoice_count=invoice_count,
+            total_amount=total_amount or Decimal('0.00'),
+        )
+
+    by_status = list(status_summaries.values())
+    return invoice.CompanyInvoiceSummaryResponse(
+        company_id=current_user.company_id,
+        total_invoices=sum(item.invoice_count for item in by_status),
+        total_amount=sum(
+            (item.total_amount for item in by_status),
+            Decimal('0.00'),
+        ),
+        by_status=by_status,
+    )
+
+
+@router.get(
     '/{invoice_id}',
     response_model=invoice.InvoiceResponse,
 )

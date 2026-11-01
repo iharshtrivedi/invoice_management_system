@@ -77,6 +77,18 @@ def test_customer_tax_and_invoice_workflow(client: TestClient, registered_user: 
     assert confirmed.status_code == 200, confirmed.text
     assert confirmed.json()["status"] == "confirmed"
 
+    summary = client.get("/api/invoices/summary", headers=registered_user)
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["total_invoices"] == 1
+    assert summary.json()["total_amount"] == "359.00"
+    by_status = {item["status"]: item for item in summary.json()["by_status"]}
+    assert by_status["confirmed"] == {
+        "status": "confirmed",
+        "invoice_count": 1,
+        "total_amount": "359.00",
+    }
+    assert by_status["draft"]["invoice_count"] == 0
+
 
 def test_health_check_and_invalid_invoice_dates(client: TestClient, registered_user: dict[str, str]):
     assert client.get("/health").json() == {"status": "healthy"}

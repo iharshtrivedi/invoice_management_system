@@ -62,3 +62,16 @@ class PaginatedInvoiceResponse(BaseModel):
     skip: int
     limit: int
     has_more: bool
+
+
+class InvoiceStatusSummary(BaseModel):
+    status: StatusEnum
+    invoice_count: int
+    total_amount: Decimal
+
+
+class CompanyInvoiceSummaryResponse(BaseModel):
+    company_id: int
+    total_invoices: int
+    total_amount: Decimal
+    by_status: list[InvoiceStatusSummary]
