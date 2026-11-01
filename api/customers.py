@@ -121,7 +121,7 @@ async def update_customer(
         await ensure_email_is_unique(
             db=db,
             target_model=customer_model.Customer,
-            email=customer.email,
+            email=customer_update.email,
             company_id=current_user.company_id,
         )
 

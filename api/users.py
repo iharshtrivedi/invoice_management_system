@@ -97,7 +97,7 @@ async def update_user(
         await ensure_email_is_unique(
             db=db,
             target_model=user_model.User,
-            email=user.email,
+            email=user_update.email,
             company_id=current_user.company_id,
         )
 
@@ -130,7 +130,7 @@ async def delete_user(
 
 
 @router.post(
-    'me/change-password',
+    '/me/change-password',
     status_code=status.HTTP_200_OK,
 )
 async def change_password(

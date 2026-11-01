@@ -29,5 +29,8 @@ class Settings(BaseSettings):
     celery_broker_url: str
     celery_result_backend: str
 
+    # Redis rate limiting
+    redis_url: str
+
 
 settings = Settings()  # type: ignore[call-arg] # Loaded from .env file

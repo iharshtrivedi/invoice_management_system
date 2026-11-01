@@ -71,7 +71,7 @@ async def create_invoice(
                 detail="One or more taxes are invalid or do not belong to your company.",
             )
     taxes_by_id = {tax.id: tax for tax in taxes}
-    missing_tax_ids = tax_ids - taxes_by_id.keys()
+    missing_tax_ids = set(tax_ids) - taxes_by_id.keys()
     
     if missing_tax_ids:
         raise HTTPException(
@@ -206,109 +206,133 @@ async def get_invoice(
     )
 
 
-# @router.patch(
-#     '/{invoice_id}',
-#     response_model=invoice.InvoiceResponse,
-# )
-# async def update_invoice(
-#     invoice_id: int,
-#     invoice_update: invoice.InvoiceUpdate,
-#     db: Annotated[AsyncSession, Depends(get_db)],
-#     current_user: CurrentUser,
-# ):
-#     inv_result = await db.execute(
-#         select(invoice_model.Invoice)
-#         .where(
-#             (invoice_model.Invoice.id == invoice_id)
-#             & (invoice_model.Invoice.company_id == current_user.company_id)
-#         )
-#     )
-#     invoice = inv_result.scalars().first()
-#     if not invoice:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail='Invoice not found'
-#         )
+@router.patch(
+    '/{invoice_id}',
+    response_model=invoice.InvoiceResponse,
+)
+async def update_invoice(
+    invoice_id: int,
+    invoice_update: invoice.InvoiceUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentUser,
+):
+    """Add and edit lines on a draft invoice owned by the current user's company."""
+    options = (
+        selectinload(invoice_model.Invoice.invoice_lines)
+        .selectinload(invoice_line_model.InvoiceLine.taxes),
+    )
+    current_invoice = await get_target_object(
+        db=db,
+        target_model=invoice_model.Invoice,
+        target_id=invoice_id,
+        company_id=current_user.company_id,
+        target_model_options=options,
+    )
+    if current_invoice.status != invoice_model.StatusEnum.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Only draft invoices can be updated',
+        )
 
-#     if invoice.status != 'draft':
-#         raise HTTPException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail='Only draft invoices can be updated'
-#         )
+    lines_by_id = {line.id: line for line in current_invoice.invoice_lines}
+    update_ids = [line.id for line in invoice_update.update_invoice_lines]
+    if len(update_ids) != len(set(update_ids)):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail='Each invoice line can only be updated once per request.',
+        )
 
-#     invoice_lines_by_id = {line.id: line for line in invoice_update.update_invoice_lines}
-#     for line_update in invoice_update.update_invoice_lines:
-#         if line_update.id not in invoice_lines_by_id:
-#             raise HTTPException(
-#                 status_code=status.HTTP_404_NOT_FOUND,
-#                 detail=(
-#                     f"Invoice line {line_update.id} "
-#                     "not found on this invoice"
-#                 ),
-#             )
+    missing_line_ids = set(update_ids) - lines_by_id.keys()
+    if missing_line_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Invoice lines not found: {sorted(missing_line_ids)}",
+        )
 
-#     tax_ids = [
-#         tax_id
-#         for line in (invoice_update.update_invoice_lines + invoice_update.create_invoice_lines)
-#         if line.tax_ids is not None
-#         for tax_id in line.tax_ids
-#     ]
-#     taxes: Sequence[tax_model.Tax] = []
-#     if tax_ids:
-#         tax_result = await db.execute(
-#             select(tax_model.Tax)
-#             .where(
-#                 (tax_model.Tax.id.in_(tax_ids))
-#                 & (tax_model.Tax.company_id == current_user.company_id)
-#             )
-#         )
-#         taxes = tax_result.scalars().all()
+    tax_ids = [
+        tax_id
+        for line in (
+            invoice_update.update_invoice_lines
+            + invoice_update.create_invoice_lines
+        )
+        if line.tax_ids is not None
+        for tax_id in line.tax_ids
+    ]
+    taxes: Sequence[tax_model.Tax] = []
+    if tax_ids:
+        tax_result = await db.execute(
+            select(tax_model.Tax).where(
+                (tax_model.Tax.id.in_(tax_ids))
+                & (tax_model.Tax.company_id == current_user.company_id)
+            )
+        )
+        taxes = tax_result.scalars().all()
 
-#         if len(taxes) != len(set(tax_ids)):
-#             raise HTTPException(
-#                 status_code=status.HTTP_400_BAD_REQUEST,
-#                 detail="One or more taxes are invalid or do not belong to your company.",
-#             )
+    taxes_by_id = {tax.id: tax for tax in taxes}
+    missing_tax_ids = set(tax_ids) - taxes_by_id.keys()
+    if missing_tax_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='One or more taxes are invalid or do not belong to your company.',
+        )
 
-#     taxes_by_id = {tax.id: tax for tax in taxes}    
-#     missing_tax_ids = tax_ids - taxes_by_id.keys()
+    for line_update in invoice_update.update_invoice_lines:
+        current_line = lines_by_id[line_update.id]
+        for field, value in line_update.model_dump(
+            exclude_unset=True,
+            exclude={'id', 'tax_ids'},
+        ).items():
+            setattr(current_line, field, value)
+        if line_update.tax_ids is not None:
+            current_line.taxes = [taxes_by_id[tax_id] for tax_id in line_update.tax_ids]
+        current_line.updated_by = current_user.id
 
-#     if missing_tax_ids:
-#         raise HTTPException(
-#             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-#             detail=f"Unknown tax IDs: {sorted(missing_tax_ids)}",
-#         )
+    for line_create in invoice_update.create_invoice_lines:
+        current_invoice.invoice_lines.append(
+            invoice_line_model.InvoiceLine(
+                description=line_create.description,
+                quantity=line_create.quantity,
+                unit_price=line_create.unit_price,
+                taxes=[taxes_by_id[tax_id] for tax_id in line_create.tax_ids],
+                created_by=current_user.id,
+                updated_by=current_user.id,
+            )
+        )
 
-#     for line_update in invoice_update.update_invoice_lines:
-#         line = invoice_lines_by_id[line_update.id]
+    subtotal = Decimal('0.00')
+    tax_total = Decimal('0.00')
+    for current_line in current_invoice.invoice_lines:
+        current_line.line_subtotal = (current_line.quantity * current_line.unit_price).quantize(
+            Decimal('0.01'),
+            rounding=ROUND_HALF_UP,
+        )
+        line_tax_amounts = (
+            (current_line.line_subtotal * tax.amount / Decimal(100))
+            if tax.tax_type == tax_model.TaxTypeEnum.PERCENT
+            else tax.amount
+            for tax in current_line.taxes
+        )
+        current_line.line_tax_total = sum(
+            line_tax_amounts,
+            Decimal('0.00'),
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        current_line.line_total = current_line.line_subtotal + current_line.line_tax_total
+        subtotal += current_line.line_subtotal
+        tax_total += current_line.line_tax_total
 
-#         changes = line_update.model_dump(
-#             exclude_unset=True,
-#             exclude={"id", "tax_ids"},
-#         )
+    current_invoice.subtotal = subtotal.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    current_invoice.tax_total = tax_total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    current_invoice.total = current_invoice.subtotal + current_invoice.tax_total
+    current_invoice.updated_by = current_user.id
 
-#         for field, value in changes.items():
-#             setattr(line, field, value)
+    await db.commit()
 
-#         if line_update.tax_ids is not None:
-#             line.taxes = [
-#                 taxes_by_id[tax_id]
-#                 for tax_id in line_update.tax_ids
-#             ]
-
-#     # Create new lines.
-#     for line_create in invoice_update.create_invoice_lines:
-#         new_line = invoice_model.InvoiceLine(
-#             description=line_create.description,
-#             quantity=line_create.quantity,
-#             unit_price=line_create.unit_price,
-#             taxes=[
-#                 taxes_by_id[tax_id]
-#                 for tax_id in line_create.tax_ids
-#             ],
-#         )
-
-#         invoice.invoice_lines.append(new_line)
+    updated_result = await db.execute(
+        select(invoice_model.Invoice)
+        .options(*options)
+        .where(invoice_model.Invoice.id == current_invoice.id)
+    )
+    return updated_result.scalar_one()
 
 
 @router.delete(

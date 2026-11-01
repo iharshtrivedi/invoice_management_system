@@ -26,6 +26,7 @@ from services.auth_service import (
 )
 from services.database import get_db
 from services import email_service
+from services.rate_limiter import rate_limit
 from tasks.email_tasks import send_email_task
 from utils.common_utils import get_target_object
 
@@ -37,7 +38,11 @@ router = APIRouter()
     response_model=auth.CompanyResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def register_company(company: auth.CompanyRegister, db: Annotated[AsyncSession, Depends(get_db)]):
+async def register_company(
+    _: Annotated[None, Depends(rate_limit(limit=3, window_seconds=60, scope='register-company'))],
+    company: auth.CompanyRegister,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
     # Check for unique company name
     result = await db.execute(
         select(company_model.Company).where(
@@ -120,6 +125,7 @@ async def deregister_company(
     response_model=auth.Token,
 )
 async def user_login(
+    _: Annotated[None, Depends(rate_limit(limit=5, window_seconds=60, scope='login'))],
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -150,6 +156,7 @@ async def user_login(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def forgot_password(
+    _: Annotated[None, Depends(rate_limit(limit=3, window_seconds=60, scope='forgot-password'))],
     request_data: auth.ForgotPasswordRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -198,6 +205,7 @@ async def forgot_password(
 
 @router.post('/reset-password', status_code=status.HTTP_200_OK)
 async def reset_password(
+    _: Annotated[None, Depends(rate_limit(limit=5, window_seconds=60, scope='reset-password'))],
     request_data: auth.ResetPasswordRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):

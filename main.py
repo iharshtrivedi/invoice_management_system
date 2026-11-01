@@ -2,17 +2,21 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api import auth, customers, invoices, services, taxes, users
+from config import settings
 from services.database import engine, get_db
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    _app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
     yield
     # Shutdown
+    await _app.state.redis.aclose()
     await engine.dispose()
 
 
