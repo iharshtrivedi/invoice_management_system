@@ -16,6 +16,7 @@ from config import settings
 from models import company as company_model
 from models import user as user_model
 from schemas import auth
+from services import email_service
 from services.auth_service import (
     create_access_token,
     generate_access_token,
@@ -25,7 +26,6 @@ from services.auth_service import (
     verify_user_role,
 )
 from services.database import get_db
-from services import email_service
 from services.rate_limiter import rate_limit
 from tasks.email_tasks import send_email_task
 from utils.common_utils import get_target_object

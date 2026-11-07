@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import RedirectResponse
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +30,12 @@ app.include_router(taxes.router, prefix="/api/taxes", tags=['taxes'])
 app.include_router(invoices.router, prefix="/api/invoices", tags=['invoices'])
 app.include_router(services.router, prefix="/api/services", tags=['services'])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=['webhooks'])
+
+
+@app.get("/", include_in_schema=False)
+async def home():
+    """Redirect visitors to the interactive API documentation."""
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/health")
